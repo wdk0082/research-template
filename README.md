@@ -8,7 +8,7 @@ the TPU lifecycle scripts.
 ## Layout
 
 ```text
-instructions/           # externally provided instructions (spec, handoffs) — NN_<slug>.md
+instructions/           # externally provided instructions (specs, handoffs, briefs) — NN_<slug>.md
 CLAUDE.md               # working rules for coding agents
 REPOSTART.md            # repo conventions (uv, env vars, GCP/TPU layout) — scaffold from this
 CONCLUSIONS.md          # important conclusions — added only after discussion
@@ -46,11 +46,12 @@ straight to the bucket, so a deleted or preempted TPU costs only a resume.
 
 1. Copy this directory, rename it after the project, and re-init git history
    if you want a clean start.
-2. Drop the project spec into `instructions/00_<slug>.md` — later handoffs
-   take the next number (see `instructions/README.md`).
+2. Drop the initial instruction document — spec, brief, or handoff, whatever
+   starts the project — into `instructions/00_<slug>.md`; each later arrival
+   takes the next number (see `instructions/README.md`).
 3. Scaffold the Python side per `REPOSTART.md`: `pyproject.toml` (src-layout
    package, hatchling; ruff + pytest config), `uv sync --all-groups`, then
-   `src/<pkg>/` and `tests/` as the spec demands.
+   `src/<pkg>/` and `tests/` as the instructions demand.
 4. Update `.env`: set `GIT_REMOTE` (and generate a fresh per-repo
    `gcp/keys/deploy_key` if the repo is private) once pushed; set
    `WANDB_PROJECT` per project.

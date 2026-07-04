@@ -11,8 +11,8 @@ scaffolding any missing piece.
 - **Install:** `uv sync --all-groups` (local dev) or `uv sync --frozen` (CI / TPU VM, never mutates lockfile)
 - **Running scripts:** always `./bin/run python ...` or `./bin/run pytest`, never bare `python`
 - **Packaging:** src-layout package built with hatchling (`[build-system]` +
-  `[tool.hatch.build.targets.wheel]`). Package name set by the project spec
-  (see `instructions/`).
+  `[tool.hatch.build.targets.wheel]`). Package name set by the project
+  instructions (see `instructions/`).
 
 ## Compute Framework — PyTorch + torch_xla
 
@@ -62,8 +62,8 @@ pyproject.toml          # single source of deps + tool config
 uv.lock                 # locked deps
 .python-version         # pinned Python version
 .env / .env.example     # env vars
-instructions/           # externally provided instructions (spec, handoffs) — NN_<slug>.md
-src/<pkg>/              # src-layout package (added with the project spec)
+instructions/           # externally provided instructions (specs, handoffs, briefs) — NN_<slug>.md
+src/<pkg>/              # src-layout package (added once the project's instructions land)
 configs/                # YAML configs
 experiments/            # runnable `# %%` scripts + PLANS.md / NOTEBOOKS.md (per-experiment docs)
 tests/                  # pytest tests
@@ -72,13 +72,14 @@ gcp/                    # Cloud TPU lifecycle scripts
 
 ## External Instructions (`instructions/`)
 
-Documents provided from outside the repo — the project spec ("prototype"),
-research-line handoffs, mid-project redirections — live in `instructions/`,
-named `NN_<snake_case_slug>.md` in arrival order (e.g. `00_prototype.md`,
-`01_<line>_handoff.md`). Numbers are never reused or reshuffled. Treat the
-files as read-only inputs: reference them in place (from `CLAUDE.md`, plans,
-notebooks), never edit or fork them; where two conflict, the newer file wins.
-See `instructions/README.md`.
+Documents provided from outside the repo — project specs ("prototypes"),
+research-line handoffs, task briefs, mid-project redirections — live in
+`instructions/`, named `NN_<snake_case_slug>.md` in arrival order. Numbers
+encode arrival order only, not a document's kind (the first file need not be
+a spec); they are never reused or reshuffled. Treat the files as read-only
+inputs: reference them in place (from `CLAUDE.md`, plans, notebooks), never
+edit or fork them; where two conflict, the newer file wins. See
+`instructions/README.md`.
 
 ## Linting & Formatting
 

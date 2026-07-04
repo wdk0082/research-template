@@ -6,21 +6,22 @@ This file provides guidance to Claude Code when working with this repository.
 
 Read these for context — don't restate them here:
 
-- `instructions/` — externally provided project instructions (the spec /
-  prototype, later handoffs). Files are named `NN_<slug>.md` in arrival order;
-  read all of them, in numeric order. See `instructions/README.md`.
+- `instructions/` — externally provided project instructions (specs /
+  prototypes, handoffs, briefs — any kind, in any order). Files are named
+  `NN_<slug>.md` in arrival order; read all of them, in numeric order. See
+  `instructions/README.md`.
 
 Layout:
 
-- **`src/<pkg>/`** — core library (package name and submodules set by the project spec)
+- **`src/<pkg>/`** — core library (package name and submodules set by the project instructions)
 - **`experiments/`** — `# %%` cell-style Python scripts with config-at-top pattern
 - **`gcp/`** — Cloud TPU lifecycle scripts (provision / run / pull / teardown)
 - **`tests/`** — pytest tests
 
 **Framework: PyTorch + torch_xla** (TPU). torch_xla is Linux/TPU-only and
 installed on the VM by `gcp/bootstrap.sh` (not in `pyproject.toml`, so the
-lockfile stays cross-platform). Work proceeds in iterations (defined by the
-project spec in `instructions/`); per-experiment state lives in
+lockfile stays cross-platform). Work proceeds in iterations (as set out in
+`instructions/`); per-experiment state lives in
 `experiments/PLANS.md` + `experiments/NOTEBOOKS.md` (one `# EXP<NNN>` section
 each).
 
@@ -30,7 +31,7 @@ each).
 
 **The repo runs in two places, each with its own `.env` and `.venv`:** your laptop (orchestration, analysis, CI parity) and the ephemeral TPU VM (compute). On the laptop `DEVICE=cpu` (or blank); on the VM `DEVICE=tpu`. `gcp/bootstrap.sh` writes a VM-appropriate `.env` at provision time.
 
-**For dependency management** (`uv add`/`uv remove`/`uv sync`/`uv lock`): run on your laptop, then commit `uv.lock`. The VM installs from the lockfile (`uv sync --frozen`) via `gcp/bootstrap.sh`. It's a src-layout package (hatchling; package name set by the project spec). torch_xla is added on the VM by `bootstrap.sh`, not tracked in `pyproject.toml`.
+**For dependency management** (`uv add`/`uv remove`/`uv sync`/`uv lock`): run on your laptop, then commit `uv.lock`. The VM installs from the lockfile (`uv sync --frozen`) via `gcp/bootstrap.sh`. It's a src-layout package (hatchling; package name set by the project instructions). torch_xla is added on the VM by `bootstrap.sh`, not tracked in `pyproject.toml`.
 
 ## Cloud TPU — how compute works
 
