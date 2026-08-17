@@ -1,47 +1,46 @@
-# research-template
+# tpu-research-template
 
-Reusable workflow scaffold for iterative ML-research projects — the
-compute-agnostic version of `tpu-research-template`, with the Cloud-TPU
-layer removed. What's kept: the agent working rules, the experiment
-plan/notebook discipline, and the env/wrapper conventions.
+Reusable workflow scaffold for iterative ML-research projects on Cloud TPU,
+extracted from `sccg-extraction` with the project content removed. What's
+kept: the agent working rules, the experiment plan/notebook discipline, and
+the TPU lifecycle scripts.
 
 ## Layout
 
 ```text
 instructions/           # externally provided instructions (specs, handoffs, briefs) — NN_<slug>.md
 CLAUDE.md               # working rules for coding agents
-REPOSTART.md            # repo conventions (uv, env vars, outputs) — scaffold from this
+REPOSTART.md            # repo conventions (uv, env vars, GCP/TPU layout) — scaffold from this
 CONCLUSIONS.md          # important conclusions — added only after discussion
 .env / .env.example     # runtime config (.env is gitignored)
 bin/run                 # env-loading command wrapper — run everything through this
-experiments/guides/     # PLAN_AND_NOTEBOOK.md, HP_SWEEP.md, REPORTS.md — workflow guides
+experiments/guides/     # PLAN_AND_NOTEBOOK.md, HP_SWEEP.md — workflow guides
+gcp/                    # Cloud TPU lifecycle scripts (create / launch / pull / teardown)
 .github/workflows/      # CI: ruff lint + format check + pytest
 ```
 
 Not included — scaffold per `REPOSTART.md` once the project starts:
-`pyproject.toml`, `uv.lock`, `src/<pkg>/`, `tests/`, `configs/`,
-`experiments/PLANS.md` + `experiments/NOTEBOOKS.md`, and any remote-compute
-backend (a `gcp/`, `slurm/`, `ssh/`, … dir — see "Remote Compute" in
-`REPOSTART.md`; `tpu-research-template` is a worked Cloud-TPU example).
+`pyproject.toml`, `uv.lock`, `src/<pkg>/`, `tests/`, `configs/`, and
+`experiments/PLANS.md` + `experiments/NOTEBOOKS.md`.
 
-## Compute model
+## Compute model (Cloud TPU)
 
-Local-first and device-agnostic. `DEVICE` in `.env` selects the accelerator
-(`cuda` / `mps` / `cpu`; blank = auto-detect), and experiments write durable
-outputs under `$ARTIFACT_DIR` and `$CKPT_DIR` (`./artifacts` and
-`./checkpoints` by default — both gitignored):
+Training runs on a **Google Cloud TPU** (`v6e`), treated as **disposable
+compute** — created per run and deleted when idle, so nothing runs 24/7.
+Durable state lives in **Google Cloud Storage**, not on the TPU:
 
 ```text
-Machine                  ──  runs experiments via ./bin/run (own .env + .venv)
-   │
+GCS bucket  ──  datasets, checkpoints, logs, artifacts  (durable; YOUR project)
+   │            gs://dis-2026-zw499-tpu-store  (us-east5)
    ▼
-$ARTIFACT_DIR/exp_NNN/   ──  plots, tables, logs        (durable, gitignored)
-$CKPT_DIR/exp_NNN/       ──  best + final checkpoints   (durable, gitignored)
+TPU VM      ──  ephemeral compute: create → train → DELETE
+   │            (course project dis-2026-tpu-zw499 — compute only)
+   ▼
+Local       ──  orchestrate (gcp/ scripts) + pull artifacts + commit to repo
 ```
 
-If a project outgrows local compute, add a backend dir per the "Remote
-Compute" conventions in `REPOSTART.md` — remote machines are disposable,
-durable state lives in a durable store, training is resumable.
+Everything goes through `gcp/` — see `gcp/README.md`. Checkpoints write
+straight to the bucket, so a deleted or preempted TPU costs only a resume.
 
 ## Starting a new project
 
@@ -53,10 +52,12 @@ durable state lives in a durable store, training is resumable.
 3. Scaffold the Python side per `REPOSTART.md`: `pyproject.toml` (src-layout
    package, hatchling; ruff + pytest config), `uv sync --all-groups`, then
    `src/<pkg>/` and `tests/` as the instructions demand.
-4. `cp .env.example .env` and fill it in (`DEVICE`, output dirs,
-   `WANDB_PROJECT`, secrets).
-5. Run the loop: `./bin/run python experiments/NNN_*.py`, inspect
-   `$ARTIFACT_DIR/exp_NNN/`, iterate per `experiments/guides/`.
+4. Update `.env`: set `GIT_REMOTE` (and generate a fresh per-repo
+   `gcp/keys/deploy_key` if the repo is private) once pushed; set
+   `WANDB_PROJECT` per project.
+5. One-time `gcp/setup_storage.sh`, then the loop:
+   `gcp/create.sh` → `gcp/launch.sh experiments/NNN_*.py` → `gcp/pull.sh` →
+   `gcp/teardown.sh`.
 
 Note: `.github/workflows/ci.yml` expects `pyproject.toml`/`uv.lock`, so CI
 fails until step 3 is done. The agent working rules and per-experiment

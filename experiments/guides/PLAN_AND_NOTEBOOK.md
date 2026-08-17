@@ -80,8 +80,6 @@ rules:
   - Then 2–5 bullets — core numbers + observations only, no
     interpretation.
   - "_(pending)_" while the round is open. Filled in once results land.
-  - Link the experiment's report artifact when it was updated this round
-    (see `REPORTS.md`).
   - If the round invalidates the round's "core thing to verify", say so
     plainly. Don't soften.
 
