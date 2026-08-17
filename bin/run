@@ -6,8 +6,8 @@
 #   ./bin/run pytest
 #   ./bin/run ruff check tests experiments
 #
-# The same wrapper works on every machine the repo runs on — each has its
-# own `.env` and its own `.venv`.
+# The same wrapper works on your laptop and on the TPU VM — each has its own
+# `.env` and its own `.venv`.
 set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -16,9 +16,9 @@ if [[ ! -f "$REPO_DIR/.env" ]]; then
     exit 1
 fi
 
-# Treat `.env` as defaults: if the caller already set a var (e.g. a remote
-# launcher injects DEVICE / CKPT_DIR), their value wins. Snapshot any key
-# `.env` will set that's already in the environment, source, then replay.
+# Treat `.env` as defaults: if the caller already set a var (e.g. launch.sh
+# injects DEVICE / CKPT_DIR), their value wins. Snapshot any key `.env` will
+# set that's already in the environment, source `.env`, then replay snapshots.
 CALLER_OVERRIDES=""
 while IFS= read -r line; do
     [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)= ]] || continue

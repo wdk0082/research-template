@@ -49,14 +49,13 @@ ENV/
 .cache/
 outputs/
 artifacts/
-checkpoints/
 wandb/
 screenshots/
 *.code-workspace
 .vscode/
 
-# Credentials — NEVER commit keys
-keys/
+# GCP credentials — NEVER commit service-account keys
+gcp/keys/
 *sa-key.json
 *service-account*.json
 application_default_credentials.json

@@ -8,21 +8,18 @@ scaffolding any missing piece.
 - **Python version:** 3.11, pinned in `.python-version`
 - **Package manager:** [uv](https://docs.astral.sh/uv/) (not pip/conda)
 - **Lockfile:** `uv.lock` checked into version control for reproducibility
-- **Install:** `uv sync --all-groups` (local dev) or `uv sync --frozen` (CI / any other machine, never mutates lockfile)
+- **Install:** `uv sync --all-groups` (local dev) or `uv sync --frozen` (CI / TPU VM, never mutates lockfile)
 - **Running scripts:** always `./bin/run python ...` or `./bin/run pytest`, never bare `python`
 - **Packaging:** src-layout package built with hatchling (`[build-system]` +
   `[tool.hatch.build.targets.wheel]`). Package name set by the project
   instructions (see `instructions/`).
 
-## Compute Framework
+## Compute Framework — PyTorch + torch_xla
 
-PyTorch by default (the project instructions may override the framework).
-Write device-agnostic code: select the device from `$DEVICE` (`cuda` /
-`mps` / `cpu`; blank = auto-detect) in one place and pass it around.
-Platform-specific accelerator packages (e.g. `torch_xla` for TPU, ROCm
-builds) stay **out of `pyproject.toml`** so the lockfile remains
-cross-platform — install them per-machine and document how in the compute
-backend's README.
+PyTorch is the model framework; torch_xla runs it on the TPU (v6e) and is
+installed on the VM by `gcp/bootstrap.sh` — Linux/TPU-only, kept out of
+`pyproject.toml` so the lockfile stays cross-platform (the laptop uses CPU
+torch).
 
 ## Virtual Environment
 
@@ -32,31 +29,31 @@ The venv lives at `$REPO_DIR/.venv` (repo root):
 UV_PROJECT_ENVIRONMENT=$REPO_DIR/.venv   # default; only set if relocating
 ```
 
-Same layout on every machine the repo runs on; each machine's `.venv` is
-reproducible from the lockfile (`uv sync`).
+Same layout on the laptop and on the TPU VM. The VM's `.venv` is created
+fresh by `gcp/bootstrap.sh` (`uv sync --frozen`) and is lost on TPU delete —
+that's fine, it's reproducible from the lockfile.
 
 ## Environment Variables (.env)
 
-- `.env` holds all runtime config (device, output paths, secrets). **Git-ignored.**
+- `.env` holds all runtime config (identity, TPU params, GCS paths, device, secrets). **Git-ignored.**
 - `.env.example` is the committed template with empty/commented values.
 - Load before any command: `set -a; source .env; set +a` (or just use `./bin/run`).
-- If the repo runs on more than one machine (laptop + remote compute), each
-  machine keeps its own `.env` derived from `.env.example` — `DEVICE` and
-  the paths are the usual differences.
+- The laptop `.env` and the VM `.env` differ (`DEVICE`, scratch paths) — both derive from `.env.example`. `gcp/bootstrap.sh` writes the VM copy.
 
 ## Cache & Output Paths
 
-Durable outputs go under env-var dirs (gitignored, local by default); heavy
-caches can be pointed at a scratch disk:
+On the **TPU VM**, heavy caches go to ephemeral scratch via env vars; durable
+outputs go to **GCS**:
 
-| Env var | Purpose | Default / example |
+| Env var | Purpose | Example value |
 | --- | --- | --- |
-| `ARTIFACT_DIR` | per-experiment artifacts (plots, tables, logs) | `./artifacts` |
-| `CKPT_DIR` | checkpoints | `./checkpoints` |
-| `SCRATCH` | optional ephemeral root for caches | `$HOME/scratch` |
+| `SCRATCH` | on-VM ephemeral root | `$HOME/scratch` |
+| `UV_CACHE_DIR` | uv download/build cache | `$SCRATCH/uv-cache` |
 | `HF_HOME` | Hugging Face hub cache | `$SCRATCH/hf` |
 | `WANDB_DIR` | W&B run files | `$SCRATCH/wandb` |
-| `UV_CACHE_DIR` | uv download/build cache | `$SCRATCH/uv-cache` |
+| `ARTIFACT_DIR` | artifact staging (→ synced to GCS) | `$SCRATCH/artifacts` |
+| `CKPT_DIR` | checkpoints (durable) | `gs://<bucket>/checkpoints` |
+| `GCS_ARTIFACTS` | artifacts (durable) | `gs://<bucket>/artifacts` |
 
 ## Directory Layout
 
@@ -70,6 +67,7 @@ src/<pkg>/              # src-layout package (added once the project's instructi
 configs/                # YAML configs
 experiments/            # runnable `# %%` scripts + PLANS.md / NOTEBOOKS.md (per-experiment docs)
 tests/                  # pytest tests
+gcp/                    # Cloud TPU lifecycle scripts
 ```
 
 ## External Instructions (`instructions/`)
@@ -94,30 +92,19 @@ edit or fork them; where two conflict, the newer file wins. See
 
 Vendored subsets of external research repos go in `third_party/<repo>/`. Each gets a `README.md` with source URL, commit hash, license, and what was taken. Rewrite instead when deep integration with our own abstractions is needed.
 
-## Remote Compute (optional)
+## GCP / Cloud TPU
 
-The template is local-first; add a remote backend only when a project needs
-one. When you do, keep these invariants:
+The training backend is Google Cloud TPU, not HPC/Slurm. Design principle:
+**the TPU is disposable compute; durable state lives in GCS.**
 
-- **Compute is disposable; durable state lives in a durable store.** Never
-  keep the only copy of checkpoints / artifacts / data on a remote machine —
-  write to object storage (S3 / GCS / …) or sync back before teardown.
-- **Provision per run, delete when idle.** Prefer cheap preemptible / spot
-  instances; nothing runs 24/7.
-- **Resumable training.** Assume preemption: checkpoint to `$CKPT_DIR`
-  every ~15–30 min and restore the latest on start, so a killed machine
-  costs only a resume.
-- **Lifecycle scripts live in a backend dir** (`gcp/`, `slurm/`, `ssh/`, …)
-  with their own README: create / bootstrap / launch / pull / status /
-  teardown. They run on the laptop and read config from `.env`; the
-  launcher injects machine-appropriate `DEVICE` / path overrides, which win
-  over `.env` (see `bin/run`).
-- **Per-machine `.env` + `.venv`**, both derived from the committed
-  templates (`.env.example`, `uv.lock`) by the bootstrap script.
-- **Never commit credentials.** Keys live under `keys/` (gitignored).
-
-`tpu-research-template` is a worked example of this pattern for Google
-Cloud TPU.
+- **Two projects, on purpose:**
+  - `dis-2026-tpu-zw499` (course-managed) — **TPU compute only**; storage is locked down here by design.
+  - `myloop-2026` (user's own, own billing) — hosts the durable bucket `gs://dis-2026-zw499-tpu-store` (`us-east5`, same region as the TPU zone → no egress cost).
+- **Provisioning:** TPUs are created as **queued resources** (best practice) and **Spot** by default (cheap, preemptible). On-demand via `TPU_SPOT=0`. Config lives in `.env` (`ACCELERATOR_TYPE=v6e-1`, `RUNTIME_VERSION=v2-alpha-tpuv6e`, `ZONE=us-east5-b`, …).
+- **Lifecycle scripts** (`gcp/`): `setup_storage.sh` (one-time auth), `create.sh`, `bootstrap.sh` (on-VM env), `launch.sh`, `pull.sh`, `status.sh`, `ssh.sh`, `teardown.sh`. See `gcp/README.md`.
+- **Cross-project auth** (TPU → bucket): either keyless (grant the dis default compute SA `roles/storage.objectAdmin` on the bucket) or an SA key copied to the VM (`GOOGLE_APPLICATION_CREDENTIALS`). `setup_storage.sh` does the keyless grant; it's an explicit, user-approved step.
+- **Resilience:** assume Spot preemption. Checkpoint to `$CKPT_DIR` (GCS) every ~15–30 min and restore the latest on start, so a killed VM costs only a resume.
+- **Local-pull fallback:** leave `GCS_BUCKET` empty to skip the bucket entirely — `launch.sh`/`teardown.sh` then `scp` artifacts to the laptop before deleting.
 
 ## .gitignore Essentials
 
@@ -126,8 +113,8 @@ Beyond the standard Python gitignore, these project-specific entries matter:
 ```text
 .env                    # secrets
 .venv                   # local venv
-.cache/ outputs/ artifacts/ checkpoints/ screenshots/
-keys/ *sa-key.json      # NEVER commit credentials
+.cache/ outputs/ artifacts/ screenshots/
+gcp/keys/ *sa-key.json  # NEVER commit service-account keys
 *.code-workspace .vscode/
 ```
 
